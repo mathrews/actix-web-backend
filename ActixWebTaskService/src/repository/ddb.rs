@@ -11,6 +11,7 @@ pub struct DDBRepository {
     table_name: String
 }
 
+#[derive(Debug)]
 pub struct DDBError;
 
 fn required_item_value(key: &str, item: &HashMap<String, AttributeValue>) -> Result<String, DDBError> {

@@ -18,9 +18,10 @@ use actix_web::{HttpServer, App, web::Data, middleware::Logger};
 async fn main() -> std::io::Result<()> {
     std::env::set_var("RUST_LOG", "debug");
     std::env::set_var("RUST_BACKTRACE", "1");
+    std::env::set_var("AWS_REGION", "sa-east-1");
     env_logger::init();
 
-    let config = aws_config::defaults(BehaviorVersion::latest()).load().await;
+    let config = aws_config::load_from_env().await;
     HttpServer::new(move || {
         let ddb_repo: DDBRepository = DDBRepository::init(
             String::from("task"),
@@ -40,7 +41,7 @@ async fn main() -> std::io::Result<()> {
             .service(pause_task)
             .service(fail_task)
     })
-    .bind(("127.0.0.1", 83))?
+    .bind(("127.0.0.1", 80))?
     .run()
     .await
 }
