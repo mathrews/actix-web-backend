@@ -1,13 +1,13 @@
 use aws_sdk_dynamodb::Client;
-use aws_sdk_dynamodb::model::AttributeValue;
-use aws_config::Config;
+use aws_sdk_dynamodb::types::AttributeValue;
+use aws_config::SdkConfig;
 use crate::model::task::{Task, TaskState};
 use log::error;
 use std::str::FromStr;
 use std::collections::HashMap;
 
 pub struct DDBRepository {
-    client: Client, 
+    client: Client,
     table_name: String
 }
 
@@ -21,7 +21,7 @@ fn required_item_value(key: &str, item: &HashMap<String, AttributeValue>) -> Res
     }
 }
 
-fn required_item_value(key: &str, item: &HashMap<String, AttributeValue>) -> Result<String, DDBError> {
+fn item_value(key: &str, item: &HashMap<String, AttributeValue>) -> Result<Option<String>, DDBError> {
     match item.get(key) {
         Some(value) => match value.as_s() {
             Ok(val) => Ok(Some(val.clone())),
@@ -31,7 +31,7 @@ fn required_item_value(key: &str, item: &HashMap<String, AttributeValue>) -> Res
     }
 }
 
-fn item_to_task(item: &hashMap<String, AttributeValue>) -> Result<Task, DDBError> {
+fn item_to_task(item: &HashMap<String, AttributeValue>) -> Result<Task, DDBError> {
     let state: TaskState = match TaskState::from_str(required_item_value("state", item)?.as_str()) {
         Ok(value) => value,
         Err(_) => return Err(DDBError)
@@ -50,7 +50,7 @@ fn item_to_task(item: &hashMap<String, AttributeValue>) -> Result<Task, DDBError
 }
 
 impl DDBRepository {
-    pub fn init(table_name: String, config: Config) -> DDBRepository {
+    pub fn init(table_name: String, config: SdkConfig) -> DDBRepository {
         let client = Client::new(&config);
         DDBRepository {
             table_name,
@@ -65,8 +65,8 @@ impl DDBRepository {
             .item("sK", AttributeValue::S(String::from(task.task_uuid)))
             .item("task_type", AttributeValue::S(String::from(task.task_type)))
             .item("state", AttributeValue::S(task.state.to_string()))
-            .item("pK", AttributeValue::S(String::from(task.source_file)));
-
+            .item("source_file", AttributeValue::S(String::from(task.source_file)));
+        
         if let Some(result_file) = task.result_file {
             request = request.item("result_file", AttributeValue::S(String::from(result_file)));
         }
@@ -78,17 +78,17 @@ impl DDBRepository {
     }
 
     pub async fn get_task(&self, task_id: String) -> Option<Task> {
-        let tokens: Vec<String> = task_id
+        let tokens:Vec<String> = task_id
             .split("_")
             .map(|x| String::from(x))
             .collect();
         let user_uuid = AttributeValue::S(tokens[0].clone());
         let task_uuid = AttributeValue::S(tokens[1].clone());
-
+        
         let res = self.client
             .query()
             .table_name(&self.table_name)
-            .key_condition_expression("#pK = :user_id and #sK = :taks_uuid")
+            .key_condition_expression("#pK = :user_id and #sK = :task_uuid")
             .expression_attribute_names("#pK", "pK")
             .expression_attribute_names("#sK", "sK")
             .expression_attribute_values(":user_id", user_uuid)
@@ -101,7 +101,7 @@ impl DDBRepository {
                 match output.items {
                     Some(items) => {
                         let item = &items.first()?;
-                        error("{:?}", &item);
+                        error!("{:?}", &item);
                         match item_to_task(item) {
                             Ok(task) => Some(task),
                             Err(_) => None
@@ -118,7 +118,4 @@ impl DDBRepository {
             }
         }
     }
-
 }
-
-
